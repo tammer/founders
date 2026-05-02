@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Deals</title>
+  <style>
+    :root {
+      --bg: #0f1218;
+      --surface: #171b24;
+      --border: #2a3142;
+      --text: #e8eaef;
+      --muted: #8b95a8;
+      --accent: #6b9fff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    header {
+      padding: 2rem 1.5rem 1rem;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      margin: 0.35rem 0 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 1.5rem 3rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    .deal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .deal-body {
+      padding: 1.25rem 1.5rem;
+    }
+
+    .deal h2 {
+      margin: 0 0 0.75rem;
+      font-size: 1.15rem;
+      font-weight: 600;
+    }
+
+    .meta {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      margin-bottom: 1rem;
+    }
+
+    .meta-row {
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    .meta-row span.label {
+      color: var(--text);
+      font-weight: 500;
+      margin-right: 0.35rem;
+    }
+
+    .video-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #000;
+    }
+
+    .video-wrap iframe {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+
+    .error {
+      padding: 1rem 1.5rem;
+      background: #2a1a1a;
+      border: 1px solid #5c3030;
+      border-radius: 12px;
+      color: #f0b4b4;
+      font-size: 0.9rem;
+    }
+
+    .empty {
+      color: var(--muted);
+      text-align: center;
+      padding: 2rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Deals</h1>
+    <p>Loaded from <code>deals.json</code></p>
+  </header>
+  <main id="root"></main>
+
+  <script>
+    function parseYoutubeStart(value) {
+      if (value == null || value === "") return 0;
+      const s = String(value);
+      const plain = s.match(/^(\d+)/);
+      if (plain) return parseInt(plain[1], 10);
+      let sec = 0;
+      const h = s.match(/(\d+)h/);
+      const m = s.match(/(\d+)m/);
+      const ss = s.match(/(\d+)s/);
+      if (h) sec += parseInt(h[1], 10) * 3600;
+      if (m) sec += parseInt(m[1], 10) * 60;
+      if (ss) sec += parseInt(ss[1], 10);
+      return sec;
+    }
+
+    function youtubeEmbedUrl(url) {
+      try {
+        const u = new URL(url, window.location.href);
+        let id = "";
+        let start = 0;
+
+        const startParam = u.searchParams.get("start") || u.searchParams.get("t");
+        if (startParam != null) start = parseYoutubeStart(startParam);
+
+        if (u.hostname === "youtu.be" || u.hostname === "www.youtu.be") {
+          id = u.pathname.replace(/^\//, "").split("/")[0];
+        } else if (u.hostname.includes("youtube.com")) {
+          if (u.pathname.startsWith("/embed/")) {
+            const embedId = u.pathname.split("/")[2];
+            const qs = new URLSearchParams(u.search);
+            const st = qs.get("start") || qs.get("t");
+            const embedStart = st != null ? parseYoutubeStart(st) : 0;
+            const q = embedStart > 0 ? `?start=${embedStart}` : "";
+            return `https://www.youtube.com/embed/${embedId}${q}`;
+          }
+          if (u.pathname.startsWith("/shorts/")) {
+            id = u.pathname.split("/")[2];
+          } else {
+            id = u.searchParams.get("v") || "";
+          }
+        }
+
+        if (!id) return null;
+        const q = start > 0 ? `?start=${start}` : "";
+        return `https://www.youtube.com/embed/${id}${q}`;
+      } catch {
+        return null;
+      }
+    }
+
+    function renderDeal(item, index) {
+      const youtubeKey = Object.keys(item).find(
+        (k) => k.toLowerCase() === "youtube"
+      );
+      const youtubeUrl = youtubeKey ? item[youtubeKey] : "";
+      const embed = youtubeUrl ? youtubeEmbedUrl(youtubeUrl) : null;
+
+      const ceo =
+        item["Founding CEO"] ??
+        item["founding CEO"] ??
+        item.name ??
+        `Deal ${index + 1}`;
+
+      const metaKeys = Object.keys(item).filter((k) => {
+        if (k === youtubeKey) return false;
+        if (k === "Founding CEO") return false;
+        return true;
+      });
+
+      const metaHtml = metaKeys
+        .map(
+          (k) =>
+            `<div class="meta-row"><span class="label">${escapeHtml(
+              k
+            )}</span>${escapeHtml(String(item[k]))}</div>`
+        )
+        .join("");
+
+      const videoHtml = embed
+        ? `<div class="video-wrap">
+            <iframe
+              src="${escapeHtml(embed)}"
+              title="YouTube: ${escapeHtml(ceo)}"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowfullscreen
+              referrerpolicy="strict-origin-when-cross-origin"
+            ></iframe>
+          </div>`
+        : `<div class="deal-body"><p class="meta-row">No valid YouTube URL.</p></div>`;
+
+      return `
+        <article class="deal">
+          <div class="deal-body">
+            <h2>${escapeHtml(String(ceo))}</h2>
+            ${metaKeys.length ? `<div class="meta">${metaHtml}</div>` : ""}
+          </div>
+          ${videoHtml}
+        </article>
+      `;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    async function main() {
+      const root = document.getElementById("root");
+      try {
+        const res = await fetch("deals.json", { cache: "no-store" });
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+        const data = await res.json();
+        if (!Array.isArray(data) || data.length === 0) {
+          root.innerHTML =
+            '<p class="empty">No deals in <code>deals.json</code>.</p>';
+          return;
+        }
+        root.innerHTML = data.map(renderDeal).join("");
+      } catch (e) {
+        root.innerHTML = `<div class="error">
+          Could not load <code>deals.json</code>. Open this page via a local server
+          (e.g. <code>python3 -m http.server</code> in this folder) so the browser can fetch the file.
+          <br /><br />
+          <small>${escapeHtml(String(e.message || e))}</small>
+        </div>`;
+      }
+    }
+
+    main();
+  </script>
+</body>
+</html>
